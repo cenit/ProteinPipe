@@ -50,7 +50,7 @@ protein_dir     =   config["folders"]["protein_dir"] # directory of protein (.xy
 guessed_dir     =   config["folders"]["guessed_dir"] # directory of guessed (eigenvectors) files
 rec_dir         =   config["folders"]["rec_dir"] # directory of reconstructed protein with GA
 cpp             =   config["folders"]["cpp"]
-scripts         =   config["folders"]["python"]
+#scripts         =   config["folders"]["python"]
 
 # thread rules
 nth_pdb2xyz     =   int(config["NTH_PDB2XYZ"])
@@ -88,50 +88,50 @@ def random_population(cmap, N, scale = 1e-2):
     return [weights + weights.T for i in N] # symmetric matrix
 
 def get_cmap(protein, thr):
-	return np.asarray(scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(protein.iloc[:,1:], metric="euclidean") > thr), dtype=np.int)
+    return np.asarray(scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(protein.iloc[:,1:], metric="euclidean") > thr), dtype=np.int)
 
 def get_lap(cmap):
-	return scipy.sparse.csgraph.laplacian(cmap, normed=False)
+    return scipy.sparse.csgraph.laplacian(cmap, normed=False)
 
 def laplacian_coords(protein, thr):
-	"""
-	Computing of laplacian (eigenvalues, eigenvectors) of contact map
-	"""
+    """
+    Computing of laplacian (eigenvalues, eigenvectors) of contact map
+    """
     vals, vecs = scipy.sparse.linalg.eigsh( get_lap(get_cmap(protein, thr)), k=4)
     return (vals[1:], vecs[:, 1:]) # remove first eigenvalue (null) and corresponding eigenvector
 
 def mutate(cmap, type = "strong", scale=1e-2):
     if type == "strong":
-    	"""
-    	mutation of an entire row and column
-    	"""
-    	pos = int(np.random.uniform(low=0, high=len(cmap), size=1))
-    	new = np.random.normal(loc=0.0, scale = scale, size=len(cmap))
-    	cmap[pos] = new * cmap[pos]
-    	cmap[:, pos] = cmap[pos]
+        """
+        mutation of an entire row and column
+        """
+        pos = int(np.random.uniform(low=0, high=len(cmap), size=1))
+        new = np.random.normal(loc=0.0, scale = scale, size=len(cmap))
+        cmap[pos] = new * cmap[pos]
+        cmap[:, pos] = cmap[pos]
     elif type == "week":
-    	"""
-    	mutation of only one weight
-    	"""
-    	nn = np.nonzero(A)
-    	pos = int(np.random.uniform(low=0, high=len(nn[0]), size=1))
-    	couple = [x[pos] for x in np.nonzero(A)]
-    	cmap[pos[0], pos[1]] = np.random.normal(loc=0.0, scale = scale, size=1)
+        """
+        mutation of only one weight
+        """
+        nn = np.nonzero(A)
+        pos = int(np.random.uniform(low=0, high=len(nn[0]), size=1))
+        couple = [x[pos] for x in np.nonzero(A)]
+        cmap[pos[0], pos[1]] = np.random.normal(loc=0.0, scale = scale, size=1)
     return cmap
 
 def crossover(cmap_a, cmap_b):
-	"""
-	Cross over as submatrix of A extracted as random permutation and B
-	"""
-	rn = np.arange(len(cmap_a))
-	np.random.shuffle(rn)
-	pos = int(np.random.uniform(low=0, high=len(cmap_a), size=1))
-	W = cmap_b
-	W[:pos, :pos] = cmap_a[rn[:pos]][:, rn[:pos]]
+    """
+    Cross over as submatrix of A extracted as random permutation and B
+    """
+    rn = np.arange(len(cmap_a))
+    np.random.shuffle(rn)
+    pos = int(np.random.uniform(low=0, high=len(cmap_a), size=1))
+    W = cmap_b
+    W[:pos, :pos] = cmap_a[rn[:pos]][:, rn[:pos]]
     return W
 
 def new_generation(old_generation, elit_rate = ELIT, mutation_rate = mutation_rate, half = HALF, type = "strong"):
-	# crossover
+    # crossover
     if i < ELIT:
         new_gen = population[i]
     else:
@@ -142,15 +142,15 @@ def new_generation(old_generation, elit_rate = ELIT, mutation_rate = mutation_ra
     return new_gen
 
 def fitness(protein_a, protein_b):
-	"""
-	Sum of square differences of coordinates
-	"""
+    """
+    Sum of square differences of coordinates
+    """
     return np.sqrt( np.sum((protein_a - protein_b)**2, axis=1) / len(protein_a))
 
 def protein_pipe(weights, real_coords, guess_cmap, thr=12):
-	w = np.sqrt(weights)
-	_, guess_coords = laplacian_coords( np.einsum('ij,jk,lk->il', w, guess_cmap, w.T), thr ) # product w*A*w^T
-	return fitness(real_coords, kabsch(real_coords, guess_coords) ) 
+    w = np.sqrt(weights)
+    _, guess_coords = laplacian_coords( np.einsum('ij,jk,lk->il', w, guess_cmap, w.T), thr ) # product w*A*w^T
+    return fitness(real_coords, kabsch(real_coords, guess_coords) ) 
 
 
 rule all:
@@ -225,7 +225,7 @@ rule reconstructGA:
         population = random_population(cmap=get_cmap(protein_guess), N=n_population, scale=1e-2)
 
         for generation in range(max_iter):
-        	fit = list(map(functools.partial(protein_pipe, real_coords=protein_true, guess_cmap=cmap_guess, thr=thr), population))
+            fit = list(map(functools.partial(protein_pipe, real_coords=protein_true, guess_cmap=cmap_guess, thr=thr), population))
             idx = np.argsort(fit)
             best = idx[0]
             if fit[best] < precision:

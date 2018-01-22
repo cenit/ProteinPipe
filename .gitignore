@@ -65,5 +65,11 @@ x64/
 bld/
 [Bb]in/
 [Oo]bj/
+
+# folders
 .snakemake/
 benchmark/
+proteinPDB/
+proteinXYZ/
+proteinGUESS/
+proteinREC/
