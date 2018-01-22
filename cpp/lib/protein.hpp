@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <numeric>
 #include <string>
+#include <iterator>
+#include <cstring>
 
 
 std::map<std::string, std::array<float, 3>> AAcolors

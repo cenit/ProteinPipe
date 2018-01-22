@@ -36,7 +36,7 @@ install:
   - cd C:\projects\
   - mkdir cygwin-downloads
   - ps: if($env:COMPILER -eq "cygwin") { Invoke-WebRequest https://cygwin.com/setup-x86_64.exe -OutFile C:\projects\cygwin-setup.exe }
-  - if [%COMPILER%]==[cygwin] C:\projects\cygwin-setup.exe --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --root C:\cygwin64 --local-package-dir C:\projects\cygwin-downloads --packages gcc-g++,cmake
+  - if [%COMPILER%]==[cygwin] C:\projects\cygwin-setup.exe --quiet-mode --no-shortcuts --no-startmenu --no-desktop --upgrade-also --root C:\cygwin64 --local-package-dir C:\projects\cygwin-downloads --packages  gcc-g++,cmake,libglut-devel,libGL-devel,libGLU-devel,libjpeg-devel,libXi-devel,libXmu-devel
   - if [%COMPILER%]==[clang] appveyor DownloadFile %CLANG_URL% -FileName llvm-installer.exe
   - if [%COMPILER%]==[clang] START /WAIT llvm-installer.exe /S /D=C:\"Program Files\LLVM"
   - git clone https://github.com/physycom/sysconfig
