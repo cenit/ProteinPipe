@@ -1,10 +1,6 @@
 #include <vector>
 #include <cmath>
-#ifdef __APPLE__
-#include <GLUT/glut.h>
-#else
-#include <GL/glut.h>
-#endif
+#include <GL/freeglut.h>
 #define WINDING_NUMBER 30
 #ifndef M_PI
 #define M_PI 3.141519
