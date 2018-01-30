@@ -73,3 +73,8 @@ proteinPDB/
 proteinXYZ/
 proteinGUESS/
 proteinREC/
+
+# Build tex
+*.aux
+*.bbl
+*.fdb_latexmk
