@@ -1,38 +1,62 @@
-#required OPENMP 4.0 (since gcc 4.9)
+
 HPP = ./cpp/lib
 OUT = ./bin
-CPP = ./cpp
+SRC = ./cpp
+OMP  = -fopenmp
 STD = -std=c++14
 fmath = -ffast-math
-#fmath = -ffp-mode=fast
-OMP  = -fopenmp
+snake = ./Snakefile
 
-ifeq ($(shell uname -o),Cygwin)
+ifeq ($(OS), Windows_NT)
+	inst = 'powershell "./install.ps1"'
+	remove = del /s 
+	empty =  nul
+	sep = \\
+else
+	inst = ./install.sh
+	remove = rm
+	empty = /dev/null
+	sep = /
+endif
+
+paper_file = main.tex
+paper_out = protein_reconstruction
+tex_dir = tex
+
+ifeq ($(OS), Cygwin)
     gnu = -std=gnu++14
 endif
 
-ifeq ($(OS), Windows_NT)
-	MKDIR_P = mkdir $(subst /,\,$(OUT)) > nul 2>&1 || (exit 0)
-	INSTALL = ./install.ps1
-else
-	MKDIR_P = mkdir -p $(OUT) 
-	INSTALL = ./install.sh
-endif
+install: $(inst)
+	$(inst) -y
 
-all: 	install \
-		protein_pipe \
+pipe: $(snake)
+	snakemake
 
-install: 	install.sh \
-		 	install.ps1
-		$(INSTALL) -y
+graph_pipe: $(snake)
+	snakemake --dag | dot -Tpdf > protein_pipe.pdf
 
-protein_pipe:	Snakefile
+pdb2xyz: $(SRC)/pdb2xyz.cpp
+		$(CXX) $(STD) $(fmath) $(gnu) $(OMP) -O3 -o $(OUT)/pdb2xyz $(SRC)/pdb2xyz.cpp
 
-		snakemake
+viewer: $(SRC)/viewer.cpp
+		$(CXX) $(STD) $(fmath) $(gnu) $(OMP) -O3 -o $(OUT)/viewer $(SRC)/viewer.cpp
 
-pdb2xyz:	$(CPP)/pdb2xyz.cpp \
+paper: $(tex_dir)/$(paper_file) \
+	   $(wildcard $(tex_dir)/img/**/*)
+	cd $(tex_dir) && latexmk -synctex=1 -bibtex -interaction=nonstopmode -file-line-error -pdf $(basename $(paper_file)) -jobname=$(paper_out) && cd ..
+	$(MAKE) clean
 
-		$(CXX) $(STD) $(fmath) $(gnu) $(OMP) -O3 -o $(OUT)/pdb2xyz $(TST)/pdb2xyz.cpp
+.PHONY: clean
+clean: $(paper_out)
+	$(remove) $(tex_dir)$(sep)$(paper_out).blg 2> $(empty)
+	$(remove) $(tex_dir)$(sep)$(paper_out).log 2> $(empty)
+	$(remove) $(tex_dir)$(sep)$(paper_out).out 2> $(empty)
+	$(remove) $(tex_dir)$(sep)$(paper_out).fls 2> $(empty)
+	$(remove) $(tex_dir)$(sep)$(paper_out).synctex.gz 2> $(empty)
 
-dir_tree:
-		$(MKDIR_P)
+.PHONY: cleanall
+cleanall: $(paper_out) clean
+	@$(remove) $(tex_dir)$(sep)$(paper_out).aux 2> $(empty)
+	@$(remove) $(tex_dir)$(sep)$(paper_out).bbl 2> $(empty)
+	@$(remove) $(tex_dir)$(sep)$(paper_out).fdb_latexmk 2> $(empty)
