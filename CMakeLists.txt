@@ -4,6 +4,10 @@ project (ProteinPipe)
 enable_language (CXX)
 set (CMAKE_CXX_STANDARD 11)
 
+if(APPLE)
+    set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
+endif()
+
 ######################################## macro for Visual Studio  ===========================
 macro(configure_link_flags)
   set(MSVC_C_CXX_FLAGS
@@ -83,7 +87,11 @@ set (HPP_DIR ${CMAKE_SOURCE_DIR}/cpp/lib) # directory of hpp
 set (CPP_DIR ${CMAKE_SOURCE_DIR}/cpp) # cpp directory
 
 find_package(OpenGL REQUIRED)
+if(APPLE)
+find_package(FREEGLUT REQUIRED)
+else()
 find_package(GLUT REQUIRED)
+endif()
 include_directories(${HPP_DIR} ${DATA_ANALYSIS} ${OpenGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
 
 if (CYGWIN)
@@ -105,4 +113,4 @@ add_executable(	viewer
         ${HPP_DIR}/object.hpp
 				${HPP_DIR}/protein.hpp
 			  )
-target_link_libraries(viewer ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLUT_LIBRARIES})
+target_link_libraries(viewer ${GLUT_LIBRARIES} ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY})

@@ -15,6 +15,7 @@ addons:
     packages:
       - gcc-6
       - g++-6
+      - clang
       - cmake
       - ninja-build
       - freeglut3-dev
@@ -37,13 +38,12 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then tar -xzf cmake-3.8.0-Linux-x86_64.tar.gz                                                  ;fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$PWD/cmake-3.8.0-Linux-x86_64/bin:$PATH                                       ;fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export CXX="g++-6" CC="gcc-6"                                                             ;fi
-  
+
   - git clone https://github.com/physycom/sysconfig.git
   - export SYSCONFIG_PATH=$(pwd)/sysconfig
 
 install:
-  - if [[ "$TRAVIS_OS_NAME" == "osx"   ]]; then export CC=/usr/local/bin/gcc-7                                                            ;fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx"   ]]; then export CXX=/usr/local/bin/g++-7                                                           ;fi
+  - if [ "$TRAVIS_OS_NAME" == "osx" ] && [ "$CC" = "gcc" ]; then export CC=/usr/local/bin/gcc-7 , export CXX=/usr/local/bin/g++-7         ;fi
   - if [[ "$TRAVIS_OS_NAME" == "osx"   ]]; then export CMAKE_C_COMPILER=${CC}                                                             ;fi
   - if [[ "$TRAVIS_OS_NAME" == "osx"   ]]; then export CMAKE_CXX_COMPILER=${CXX}                                                          ;fi
   - if [[ "$TRAVIS_OS_NAME" == "osx"   ]]; then export CMAKE_LINKER=clang++                                                               ;fi

@@ -1,5 +1,5 @@
 // sizes of window
-#define WIDTH 1000 
+#define WIDTH 1000
 #define HEIGHT 1000
 int LINK;      // 0 - simple line link
 			   // 1 - spring link
@@ -97,20 +97,20 @@ int main(int argc, char** argv)
 		thr = std::stof(argv[2]);
 		LINK = std::stoi(argv[3]);
 	}break;
-	default: 
+	default:
 	{
 		show_usage();
 		exit(1);
 	}
 	}
-	
+
 
 	protein = Protein(filename);
 	contact_map(protein, thr);
 	protein.center();
 	protein.normalize();
-	
+
 	draw_window(argc, argv, "Protein Viewer");
-	
+
 	return 0;
 }

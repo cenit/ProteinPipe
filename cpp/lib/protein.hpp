@@ -1,3 +1,25 @@
+#if defined(_MSC_VER)
+#include <wchar.h>
+#define fseeko _fseeki64
+#define ftello _ftelli64
+#endif
+
+#if defined(__MINGW32__)
+#define fseeko fseeko64
+#define ftello ftello64
+#endif
+
+#if defined(__CYGWIN__)
+#define fseeko fseek
+#define ftello ftell
+#endif
+
+#if defined(__APPLE__)
+#define fseeko fseek
+#define ftello ftell
+#endif
+
+
 #include <map>
 #include <array>
 #include <fstream>
@@ -135,7 +157,7 @@ void Protein::normalize()
   std::transform(this->x, this->x + this->n, this->x, [&max_x](float &tmp) {return tmp / max_x; });
   std::transform(this->y, this->y + this->n, this->y, [&max_y](float &tmp) {return tmp / max_y; });
   std::transform(this->z, this->z + this->n, this->z, [&max_z](float &tmp) {return tmp / max_z; });
-}	
+}
 
 void Protein::global_normalize()
 {

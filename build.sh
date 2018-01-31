@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [[ "$OSTYPE" == "darwin"* ]]; then
+if [[ "$OSTYPE" == "darwin"* && "$1" == "gcc" ]]; then
  export CC="/usr/local/bin/gcc-7"
  export CXX="/usr/local/bin/g++-7"
 fi
