@@ -1,6 +1,9 @@
-# snakemake
-# snakemake -n # check workflow
-# snakemake --dag | dot -Tpdf > protein_pipe.pdf
+# snakemake                             # to run
+# snakemake --force clear               # to force rule
+# snakemake -n                          # check workflow
+# REMEMBER REMEMBER : pipe in powershell wraps the object into utf-16 char set (avoid it...evil!)
+# WIN32 :=  cmd /C "snakemake --dag | dot -Tpdf > workflow.pdf"
+# UNIX  :=  snakemake --dag | dot -Tpdf > workflow.pdf
 
 from __future__ import division
 import numpy as np
@@ -59,7 +62,7 @@ nth_genetic     =   int(config["NTH_GENETIC"])
 
 ELIT = n_population * elit_rate
 HALF = n_population / 2
-protein = [f.rsplit('.', 1)[0] for f in os.listdir( os.path.join(local, pdb_dir)) if os.path.isfile(os.path.join( os.path.join(local, pdb_dir), f))]
+protein = [f.rsplit('.', 1)[0] for f in os.listdir( os.path.join(local, pdb_dir)) if os.path.isfile(os.path.join( os.path.join(local, pdb_dir), f)) and f[-3:] == pdb_extension]
 
 with(suppress(OSError)):
     os.makedirs(os.path.join(local, protein_dir))
@@ -81,14 +84,14 @@ def kabsch(pt_true, pt_guessed):
     if d:
         S[-1] = -S[-1]
         V[:, -1] = -V[:, -1]
-    return np.dot(pt_guessed, np.dot(V, W)) # return pt_guessed rotated by U ( = V * W, rotation matrix)
+    return pd.DataFrame(data = np.dot(pt_guessed, np.dot(V, W)), columns=["x", "y", "z"]) # return pt_guessed rotated by U ( = V * W, rotation matrix)
 
 def random_population(cmap, N, scale = 1e-2):
-    weights = [np.triu(np.random.normal(loc=0.0, scale=scale, size=(len(cmap), len(cmap))) * cmap) for i in N]
-    return [weights + weights.T for i in N] # symmetric matrix
+    weights = [np.triu(np.random.normal(loc=0.0, scale=scale, size=(len(cmap), len(cmap))) * cmap) for i in range(N)]
+    return [w + w.T for w in weights] # symmetric matrix
 
 def get_cmap(protein, thr):
-    return np.asarray(scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(protein.iloc[:,1:], metric="euclidean") > thr), dtype=np.int)
+    return np.asarray(scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(protein.iloc[:,1:], metric="euclidean") < thr), dtype=np.int)
 
 def get_lap(cmap):
     return scipy.sparse.csgraph.laplacian(cmap, normed=False)
@@ -97,8 +100,8 @@ def laplacian_coords(protein, thr):
     """
     Computing of laplacian (eigenvalues, eigenvectors) of contact map
     """
-    vals, vecs = scipy.sparse.linalg.eigsh( get_lap(get_cmap(protein, thr)), k=4)
-    return (vals[1:], vecs[:, 1:]) # remove first eigenvalue (null) and corresponding eigenvector
+    vals, vecs = scipy.linalg.eig(a=get_lap(cmap=get_cmap(protein=protein, thr=thr)))
+    return (vals[1:4], vecs[:, 1:4]) # remove first eigenvalue (null) and corresponding eigenvector
 
 def mutate(cmap, type = "strong", scale=1e-2):
     if type == "strong":
@@ -109,13 +112,12 @@ def mutate(cmap, type = "strong", scale=1e-2):
         new = np.random.normal(loc=0.0, scale = scale, size=len(cmap))
         cmap[pos] = new * cmap[pos]
         cmap[:, pos] = cmap[pos]
-    elif type == "week":
+    elif type == "weak":
         """
         mutation of only one weight
         """
-        nn = np.nonzero(A)
+        nn = np.nonzero(cmap)
         pos = int(np.random.uniform(low=0, high=len(nn[0]), size=1))
-        couple = [x[pos] for x in np.nonzero(A)]
         cmap[pos[0], pos[1]] = np.random.normal(loc=0.0, scale = scale, size=1)
     return cmap
 
@@ -130,12 +132,13 @@ def crossover(cmap_a, cmap_b):
     W[:pos, :pos] = cmap_a[rn[:pos]][:, rn[:pos]]
     return W
 
-def new_generation(old_generation, elit_rate = ELIT, mutation_rate = mutation_rate, half = HALF, type = "strong"):
+def new_generation(old_generation, rank, elit_rate = ELIT, mutation_rate = mutation_rate, half = HALF, type = "strong"):
     # crossover
+    # REALLY BIG TROUBLES
     if i < ELIT:
         new_gen = population[i]
     else:
-        new_gen = crossover(population[idx[np.random.rand() * HALF]], population[idx[np.random.rand() * HALF]])
+        new_gen = crossover(population[rank[np.random.rand() * HALF]], population[rank[np.random.rand() * HALF]])
     # mutation
     if np.random.rand() < mutation_rate:
         new_gen = mutate(new_gen, type)
@@ -147,9 +150,10 @@ def fitness(protein_a, protein_b):
     """
     return np.sqrt( np.sum((protein_a - protein_b)**2, axis=1) / len(protein_a))
 
-def protein_pipe(weights, real_coords, guess_cmap, thr=12):
+def protein_pipe(weights, real_coords, guess_cmap, thr=8):
     w = np.sqrt(weights)
-    _, guess_coords = laplacian_coords( np.einsum('ij,jk,lk->il', w, guess_cmap, w.T), thr ) # product w*A*w^T
+    # BIG TROUBLES
+    _, guess_coords = laplacian_coords( protein=np.einsum('ij,jk,lk->il', w, guess_cmap, w.T), thr=thr ) # product w*A*w^T
     return fitness(real_coords, kabsch(real_coords, guess_coords) ) 
 
 
@@ -172,29 +176,23 @@ rule build:
 
 rule pdb2xyz:
     input:
-        pdbfile  = os.path.join(local, pdb_dir, "{protein}." + pdb_extension),
-        software = os.path.join(local, "bin", "pdb2xyz" + extension),
+        pdbfile  = os.path.join(local, pdb_dir, "{protein}"),# + pdb_extension),
     output:
-        out      = os.path.join(local, protein_dir, "{protein}.xyz"),
+        out      = os.path.join(local, pdb_dir, "{protein}." + "xyz"),
     benchmark:
         os.path.join("benchmark", "benchmark_pdb2xyz_{protein}.dat")
     threads:
         nth_pdb2xyz 
     message:
         "Conversion PDB2xyz for {wildcards.protein}"
-    shell:
-        os.path.join(local,
-                     ' '.join(["{input.software}",
-                               "{input.pdbfile}",
-                               ' '.join(atoms)
-                               ])
-                    )
+    run:
+        os.system(' '.join([os.path.join(local, "bin", "pdb2xyz" + extension), input.pdbfile, "-s", ' '.join(atoms)]))
 
 rule guess_protein:
     input:
-        coord_file = os.path.join(local, protein_dir, "{protein}.xyz"),
+        coord_file = os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".xyz"),
     output:
-        guess_file = os.path.join(local, guessed_dir, "{protein}.guess")
+        guess_file = os.path.join(local, guessed_dir, "{protein}." + pdb_extension + ".guess")
     benchmark:
         os.path.join("benchmark", "benchmark_reconstruction_{protein}.dat")
     threads:
@@ -202,14 +200,15 @@ rule guess_protein:
     message:
         "Simple reconstruction protein for {wildcards.protein}"
     run:
-        coords = pd.read_csv(input.coord_file, sep=",", header=None, names=["atoms", "x", "y", "z"])
-        vals, vecs = compute_guess(coords, thr)
-        pd.DataFrame(vecs, index=vals).to_csv(output.guess_file, sep=",", header=True, index=False)
+        coords = pd.read_csv(input.coord_file, sep="\t", header=None, names=["atoms", "x", "y", "z"])
+        pd.concat([coords["atoms"], kabsch( pt_true=coords.iloc[:,1:], # remove atoms columns
+                                            pt_guessed=pd.DataFrame(data=laplacian_coords(protein=coords, thr=thr)[1], columns=["x", "y", "z"]) # dataset with only eigenvecs
+                                            )], axis=1).to_csv(output.guess_file, sep="\t", header=False, index=False)
 
 rule reconstructGA:
     input:
-        coord_file = os.path.join(local, protein_dir, "{protein}.xyz"),
-        guess_file = os.path.join(local, guessed_dir, "{protein}.guess"),
+        coord_file = os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".xyz"),
+        guess_file = os.path.join(local, guessed_dir, "{protein}." + pdb_extension + ".guess"),
     output:
         rec_file  = os.path.join(local, rec_dir, "{protein}.rec")
     benchmark:
@@ -219,10 +218,10 @@ rule reconstructGA:
     message:
         "GA reconstruction protein for {wildcards.protein}"
     run:
-        protein_true  = pd.read_csv(input.coord_file, sep=",", header=None, usecols=["x", "y", "z"], names=["atoms", "x", "y", "z"])
-        protein_guess = pd.read_csv(input.guess_file, sep=",", header=None, usecols=["x", "y", "z"], names=["atoms", "x", "y", "z"])
-        cmap_guess = get_cmap(protein_guess, thr)
-        population = random_population(cmap=get_cmap(protein_guess), N=n_population, scale=1e-2)
+        protein_true  = pd.read_csv(input.coord_file, sep="\t", header=None, usecols=["x", "y", "z"], names=["atoms", "x", "y", "z"])
+        protein_guess = pd.read_csv(input.guess_file, sep="\t", header=None, usecols=["x", "y", "z"], names=["atoms", "x", "y", "z"])
+        cmap_guess = get_cmap(protein_guess, thr=thr)
+        population = random_population(cmap=cmap_guess, N=n_population, scale=1e-2)
 
         for generation in range(max_iter):
             fit = list(map(functools.partial(protein_pipe, real_coords=protein_true, guess_cmap=cmap_guess, thr=thr), population))
@@ -230,6 +229,6 @@ rule reconstructGA:
             best = idx[0]
             if fit[best] < precision:
                 break
-            population = list(map(functools.partial(new_generation, elit_rate = ELIT, mutation_rate = mutation_rate, half = HALF, type = "strong"), population))
-        population[best].to_csv(output.rec_file, sep=",", header=True, index=False)
+            population = list(map(functools.partial(new_generation, rank=idx, elit_rate = ELIT, mutation_rate = mutation_rate, half = HALF, type = "strong"), population))
+        population[best].to_csv(output.rec_file, sep=",", header=False, index=False)
 

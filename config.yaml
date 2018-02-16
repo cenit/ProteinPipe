@@ -8,8 +8,8 @@ atoms:
   - 'CA'
 
 seed: 123
-thr: 12
-pdb_ext: 'ent'
+thr: 8
+pdb_ext: 'pdb'
 n_population: 2048
 max_iter: 16400
 precision: '1e-4'
