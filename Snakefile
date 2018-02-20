@@ -14,10 +14,10 @@ import os # local, sep, files, dirs
 import sys # exit
 import platform # check system
 import shutil # move file
-from contextlib import suppress # makedir with no error 
 import subprocess # capture output
 import scipy # squareform, pdist, csgraph, eigsh
 import functools # map with multiple args
+from string import Template # template string cmd OS
 
 # plots of results
 import seaborn as sns # pretty/easy plots with pandas
@@ -33,10 +33,12 @@ if platform.system() == "Windows":
     extension   =   ".exe"
     build       =   "powershell .\\build.ps1"
     shell       =   ".ps1"
+    extract     =   Template('7z x $pdb & rename *.cif *.pdb')
 elif platform.system() == "Linux" or platform.system()[:6] == "CYGWIN":
     extension   =   ""
     build       =   'bash -c "./build.sh"'
     shell       =   ".sh"
+    extract     =   Template("gunzip -k $pdb; rename 's/\.cif$/\.pdb/' *.cif")
 
 pdb_extension   =   config["pdb_ext"]
 atoms           =   list(config["atoms"]) # type of atoms to conserve
@@ -49,9 +51,6 @@ mutation_rate   =   float(config["mutation"]) # probability of mutation
 
 # folders
 pdb_dir         =   config["folders"]["pdb_dir"] # directory of pdb files
-#protein_dir     =   config["folders"]["protein_dir"] # directory of protein (.xyz) files
-guessed_dir     =   config["folders"]["guessed_dir"] # directory of guessed (eigenvectors) files
-rec_dir         =   config["folders"]["rec_dir"] # directory of reconstructed protein with GA
 cpp             =   config["folders"]["cpp"]
 #scripts         =   config["folders"]["python"]
 
@@ -62,12 +61,7 @@ nth_genetic     =   int(config["NTH_GENETIC"])
 
 ELIT = n_population * elit_rate
 HALF = n_population / 2
-protein = [f.rsplit('.', 1)[0] for f in os.listdir( os.path.join(local, pdb_dir)) if os.path.isfile(os.path.join( os.path.join(local, pdb_dir), f)) and f[-3:] == pdb_extension]
-
-with(suppress(OSError)):
-    os.makedirs(os.path.join(local, guessed_dir))
-    #os.makedirs(os.path.join(local, rec_dir))
-    #os.makedirs(os.path.join(local, protein_dir))
+protein = list(config["protein"]) 
 
 def kabsch(pt_true, pt_guessed):
     pt_true -= pt_true.mean(axis = 0)
@@ -160,8 +154,21 @@ def protein_pipe(weights, real_coords, guess_cmap, thr=8):
 
 rule all:
     input:
-    	db_compare = os.path.join(local, "db_compare.csv"),
-        #expand(os.path.join(local, rec_dir, "{protein}.rec"), protein=protein)
+        db_compare = os.path.join(local, "db_compare.csv"),
+
+rule download:
+    output:
+        protein = os.path.join(local, pdb_dir, "{protein}.pdb"),
+    benchmark:
+        os.path.join("benchmark", "benchmark_download")
+    message:
+        "Download of protein {wildcards.protein}"
+    params:
+        protein = "{protein}",
+        out_dir = os.path.join(local, pdb_dir),
+    run:
+        os.system("curl \"http://files.rcsb.org/view/"+ params.protein + ".pdb\" -o " + 
+                  os.path.join(local, pdb_dir) + "/\"" + params.protein + ".pdb\"")
 
 rule build:
     input:
@@ -176,9 +183,21 @@ rule build:
     shell:
         build
 
+rule uncompress:
+    input:
+        os.path.join(local, pdb_dir, "{protein}.gz")
+    output:
+        os.path.join(local, pdb_dir, "{protein}." + pdb_extension)
+    benchmark:
+        os.path.join("benchmark", "benchmark_uncompress.dat")
+    message:
+        "Uncompress protein {wildcards.protein}"
+    shell:
+        extract.substitute(pdb="{wildcards.protein}")
+
 rule pdb2xyz:
     input:
-        pdbfile  = os.path.join(local, pdb_dir, "{protein}"),# + pdb_extension),
+        pdbfile  = os.path.join(local, pdb_dir, "{protein}"),
     output:
         out      = os.path.join(local, pdb_dir, "{protein}." + "xyz"),
     benchmark:
@@ -194,7 +213,7 @@ rule guess_protein:
     input:
         coord_file = os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".xyz"),
     output:
-        guess_file = os.path.join(local, guessed_dir, "{protein}." + pdb_extension + ".guess")
+        guess_file = os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".guess")
     benchmark:
         os.path.join("benchmark", "benchmark_reconstruction_{protein}.dat")
     threads:
@@ -208,33 +227,33 @@ rule guess_protein:
                                             )], axis=1).to_csv(output.guess_file, sep="\t", header=False, index=False)
 
 rule compare:
-	input:
-		true_coords = expand(os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".xyz"), protein=protein),
-		rec_coords = expand(os.path.join(local, guessed_dir, "{protein}." + pdb_extension + ".guess"), protein=protein),
-	output:
-		db_compare = os.path.join(local, "db_compare.csv"),
-	benchmark:
-		os.path.join("benchmark", "benchmark_compare.dat")
-	message:
-		"Compare proteins"
-	run:
-		with open(output.db_compare, "w") as out:
-			out.write("pdb_name,rmsd\n")
-			for true, guess in zip(input.true_coords, input.rec_coords):
-				tcoord = pd.read_csv(true, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
-				gcoord = pd.read_csv(guess, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
+    input:
+        true_coords = expand(os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".xyz"), protein=protein),
+        rec_coords = expand(os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".guess"), protein=protein),
+    output:
+        db_compare = os.path.join(local, "db_compare.csv"),
+    benchmark:
+        os.path.join("benchmark", "benchmark_compare.dat")
+    message:
+        "Compare proteins"
+    run:
+        with open(output.db_compare, "w") as out:
+            out.write("pdb_name,rmsd\n")
+            for true, guess in zip(input.true_coords, input.rec_coords):
+                tcoord = pd.read_csv(true, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
+                gcoord = pd.read_csv(guess, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
 
-				rmsd =  ((tcoord - tcoord.mean(axis = 0)) - gcoord)**2
-				pdb_name = true.split(os.sep)[-1].split(".")[0]
-				out.write("%s,%.3f"%(pdb_name, rmsd))
+                rmsd =  np.sum( np.sqrt( np.sum( ((tcoord - tcoord.mean(axis = 0)) - gcoord)**2, axis=1) ) )
+                pdb_name = true.split(os.sep)[-1].split(".")[0]
+                out.write("%s,%.3f\n"%(pdb_name, rmsd))
 
 
 rule reconstructGA:
     input:
         coord_file = os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".xyz"),
-        guess_file = os.path.join(local, guessed_dir, "{protein}." + pdb_extension + ".guess"),
+        guess_file = os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".guess"),
     output:
-        rec_file  = os.path.join(local, rec_dir, "{protein}.rec")
+        rec_file  = os.path.join(local, pdb_dir, "{protein}.rec")
     benchmark:
         os.path.join("benchmark", "benchmark_GA_{protein}.dat")
     threads:

@@ -1,3 +1,4 @@
+#curl "http://files.rcsb.org/view/{1PPE,1AVW,1BRC}.pdb" -o "#1.pdb"
 
 n_cpu: '1'
 NTH_PDB2XYZ: 1
@@ -16,10 +17,13 @@ precision: '1e-4'
 elit: .1
 mutation: .3
 folders:
-  pdb_dir: 'proteinPDB'
-#  protein_dir: 'proteinXYZ'
-  guessed_dir: 'proteinGUESS'
-  rec_dir: 'proteinREC'
+  pdb_dir: 'protein'
   cpp: 'cpp'
   py: 'python'
 
+protein:
+  - 1PPE
+  - 1AVW
+  - 1BRC
+  - 4D2I
+  - 4CS4
