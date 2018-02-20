@@ -49,7 +49,7 @@ mutation_rate   =   float(config["mutation"]) # probability of mutation
 
 # folders
 pdb_dir         =   config["folders"]["pdb_dir"] # directory of pdb files
-protein_dir     =   config["folders"]["protein_dir"] # directory of protein (.xyz) files
+#protein_dir     =   config["folders"]["protein_dir"] # directory of protein (.xyz) files
 guessed_dir     =   config["folders"]["guessed_dir"] # directory of guessed (eigenvectors) files
 rec_dir         =   config["folders"]["rec_dir"] # directory of reconstructed protein with GA
 cpp             =   config["folders"]["cpp"]
@@ -65,9 +65,9 @@ HALF = n_population / 2
 protein = [f.rsplit('.', 1)[0] for f in os.listdir( os.path.join(local, pdb_dir)) if os.path.isfile(os.path.join( os.path.join(local, pdb_dir), f)) and f[-3:] == pdb_extension]
 
 with(suppress(OSError)):
-    os.makedirs(os.path.join(local, protein_dir))
     os.makedirs(os.path.join(local, guessed_dir))
-    os.makedirs(os.path.join(local, rec_dir))
+    #os.makedirs(os.path.join(local, rec_dir))
+    #os.makedirs(os.path.join(local, protein_dir))
 
 def kabsch(pt_true, pt_guessed):
     pt_true -= pt_true.mean(axis = 0)
@@ -84,7 +84,8 @@ def kabsch(pt_true, pt_guessed):
     if d:
         S[-1] = -S[-1]
         V[:, -1] = -V[:, -1]
-    return pd.DataFrame(data = np.dot(pt_guessed, np.dot(V, W)), columns=["x", "y", "z"]) # return pt_guessed rotated by U ( = V * W, rotation matrix)
+    scale = sum(S) / pt_true.var().sum()
+    return pd.DataFrame(data = np.dot(pt_guessed, np.dot(V, W)) * scale, columns=["x", "y", "z"]) # return pt_guessed rotated by U ( = V * W, rotation matrix)
 
 def random_population(cmap, N, scale = 1e-2):
     weights = [np.triu(np.random.normal(loc=0.0, scale=scale, size=(len(cmap), len(cmap))) * cmap) for i in range(N)]
@@ -159,7 +160,8 @@ def protein_pipe(weights, real_coords, guess_cmap, thr=8):
 
 rule all:
     input:
-        expand(os.path.join(local, rec_dir, "{protein}.rec"), protein=protein)
+    	db_compare = os.path.join(local, "db_compare.csv"),
+        #expand(os.path.join(local, rec_dir, "{protein}.rec"), protein=protein)
 
 rule build:
     input:
@@ -204,6 +206,28 @@ rule guess_protein:
         pd.concat([coords["atoms"], kabsch( pt_true=coords.iloc[:,1:], # remove atoms columns
                                             pt_guessed=pd.DataFrame(data=laplacian_coords(protein=coords, thr=thr)[1], columns=["x", "y", "z"]) # dataset with only eigenvecs
                                             )], axis=1).to_csv(output.guess_file, sep="\t", header=False, index=False)
+
+rule compare:
+	input:
+		true_coords = expand(os.path.join(local, pdb_dir, "{protein}." + pdb_extension + ".xyz"), protein=protein),
+		rec_coords = expand(os.path.join(local, guessed_dir, "{protein}." + pdb_extension + ".guess"), protein=protein),
+	output:
+		db_compare = os.path.join(local, "db_compare.csv"),
+	benchmark:
+		os.path.join("benchmark", "benchmark_compare.dat")
+	message:
+		"Compare proteins"
+	run:
+		with open(output.db_compare, "w") as out:
+			out.write("pdb_name,rmsd\n")
+			for true, guess in zip(input.true_coords, input.rec_coords):
+				tcoord = pd.read_csv(true, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
+				gcoord = pd.read_csv(guess, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
+
+				rmsd =  ((tcoord - tcoord.mean(axis = 0)) - gcoord)**2
+				pdb_name = true.split(os.sep)[-1].split(".")[0]
+				out.write("%s,%.3f"%(pdb_name, rmsd))
+
 
 rule reconstructGA:
     input:

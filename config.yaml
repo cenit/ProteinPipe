@@ -17,7 +17,7 @@ elit: .1
 mutation: .3
 folders:
   pdb_dir: 'proteinPDB'
-  protein_dir: 'proteinXYZ'
+#  protein_dir: 'proteinXYZ'
   guessed_dir: 'proteinGUESS'
   rec_dir: 'proteinREC'
   cpp: 'cpp'
