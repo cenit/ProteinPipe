@@ -18,6 +18,7 @@ import subprocess # capture output
 import scipy # squareform, pdist, csgraph, eigsh
 import functools # map with multiple args
 from string import Template # template string cmd OS
+import itertools # combination
 
 # plots of results
 import seaborn as sns # pretty/easy plots with pandas
@@ -86,7 +87,7 @@ def random_population(cmap, N, scale = 1e-2):
     return [w + w.T for w in weights] # symmetric matrix
 
 def get_cmap(protein, thr):
-    return np.asarray(scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(protein.iloc[:,1:], metric="euclidean") < thr), dtype=np.int)
+    return scipy.sparse.csc_matrix(scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(protein.iloc[:,1:], metric="euclidean") < thr), dtype=np.float)
 
 def get_lap(cmap):
     return scipy.sparse.csgraph.laplacian(cmap, normed=False)
@@ -95,8 +96,8 @@ def laplacian_coords(protein, thr):
     """
     Computing of laplacian (eigenvalues, eigenvectors) of contact map
     """
-    vals, vecs = scipy.linalg.eig(a=get_lap(cmap=get_cmap(protein=protein, thr=thr)))
-    return (vals[1:4], vecs[:, 1:4]) # remove first eigenvalue (null) and corresponding eigenvector
+    _, vecs = scipy.sparse.linalg.eigsh(A=get_lap(cmap=get_cmap(protein=protein, thr=thr)), k=4, sigma=0)
+    return vecs[:, 1:4] # remove first eigenvalue (null) and corresponding eigenvector
 
 def mutate(cmap, type = "strong", scale=1e-2):
     if type == "strong":
@@ -148,7 +149,7 @@ def fitness(protein_a, protein_b):
 def protein_pipe(weights, real_coords, guess_cmap, thr=8):
     w = np.sqrt(weights)
     # BIG TROUBLES
-    _, guess_coords = laplacian_coords( protein=np.einsum('ij,jk,lk->il', w, guess_cmap, w.T), thr=thr ) # product w*A*w^T
+    guess_coords = laplacian_coords( protein=np.einsum('ij,jk,lk->il', w, guess_cmap, w.T), thr=thr ) # product w*A*w^T
     return fitness(real_coords, kabsch(real_coords, guess_coords) ) 
 
 
@@ -223,7 +224,7 @@ rule guess_protein:
     run:
         coords = pd.read_csv(input.coord_file, sep="\t", header=None, names=["atoms", "x", "y", "z"])
         pd.concat([coords["atoms"], kabsch( pt_true=coords.iloc[:,1:], # remove atoms columns
-                                            pt_guessed=pd.DataFrame(data=laplacian_coords(protein=coords, thr=thr)[1], columns=["x", "y", "z"]) # dataset with only eigenvecs
+                                            pt_guessed=pd.DataFrame(data=laplacian_coords(protein=coords, thr=thr), columns=["x", "y", "z"]) # dataset with only eigenvecs
                                             )], axis=1).to_csv(output.guess_file, sep="\t", header=False, index=False)
 
 rule compare:
@@ -238,14 +239,22 @@ rule compare:
         "Compare proteins"
     run:
         with open(output.db_compare, "w") as out:
-            out.write("pdb_name,rmsd\n")
+            out.write("pdb_name\tnCA\ttot_dist\trmsd\taxis\n")
             for true, guess in zip(input.true_coords, input.rec_coords):
                 tcoord = pd.read_csv(true, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
                 gcoord = pd.read_csv(guess, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
 
-                rmsd =  np.sum( np.sqrt( np.sum( ((tcoord - tcoord.mean(axis = 0)) - gcoord)**2, axis=1) ) )
+                # find right permutation of axis 
+                combo = list(itertools.permutations(["x", "y", "z"]))
+                permutation = list(combo[ np.argmax( [ sum([ scipy.stats.pearsonr(x=tcoord[true], y=gcoord[guess])[0] 
+                            						   for true, guess in zip(["x","y","z"], list(comb))
+                            						  ]) 
+                    							    for comb in combo ]
+                    							    )])
+
+                tot_dist =  np.sum( np.sqrt( np.sum( ((tcoord - tcoord.mean(axis = 0)) - gcoord[permutation])**2, axis=1) ) )
                 pdb_name = true.split(os.sep)[-1].split(".")[0]
-                out.write("%s,%.3f\n"%(pdb_name, rmsd))
+                out.write("%s\t%d\t%.3f\t%.3f\t%s\n"%(pdb_name, len(tcoord), tot_dist, tot_dist / len(tcoord), ';'.join(map(str, permutation))))
 
 
 rule reconstructGA:
