@@ -1,5 +1,4 @@
-# snakemake                             # to run
-# snakemake --force clear               # to force rule
+# snakemake --cores 8                   # to run
 # snakemake -n                          # check workflow
 # REMEMBER REMEMBER : pipe in powershell wraps the object into utf-16 char set (avoid it...evil!)
 # WIN32 :=  cmd /C "snakemake --dag | dot -Tpdf > workflow.pdf"
@@ -33,12 +32,12 @@ local           =   os.path.abspath(".")
 if platform.system() == "Windows":
     extension   =   ".exe"
     build       =   "powershell .\\build.ps1"
-    shell       =   ".ps1"
+    myshell     =   ".ps1"
     extract     =   Template('7z x $pdb & rename *.cif *.pdb')
 elif platform.system() == "Linux" or platform.system()[:6] == "CYGWIN":
     extension   =   ""
     build       =   'bash -c "./build.sh"'
-    shell       =   ".sh"
+    myshell     =   ".sh"
     extract     =   Template("gunzip -k $pdb; rename 's/\.cif$/\.pdb/' *.cif")
 
 pdb_extension   =   config["pdb_ext"]
@@ -53,7 +52,7 @@ mutation_rate   =   float(config["mutation"]) # probability of mutation
 # folders
 pdb_dir         =   config["folders"]["pdb_dir"] # directory of pdb files
 cpp             =   config["folders"]["cpp"]
-#scripts         =   config["folders"]["python"]
+scripts         =   config["folders"]["py"]
 
 # thread rules
 nth_pdb2xyz     =   int(config["NTH_PDB2XYZ"])
@@ -65,8 +64,22 @@ HALF = n_population / 2
 protein = list(config["protein"]) 
 
 def kabsch(pt_true, pt_guessed):
+    # Translation
     pt_true -= pt_true.mean(axis = 0)
     pt_guessed -= pt_guessed.mean(axis = 0)
+
+    # Scaling
+    pt_true /= np.linalg.norm(pt_true, axis=0)
+    pt_guessed /= np.linalg.norm(pt_guessed, axis=0) # pt_guessed already normalized to 1 when eig results
+
+    # find right permutation of axis 
+    combo = list(itertools.permutations(["x", "y", "z"]))
+    permutation = list(combo[ np.argmax( [ sum([ scipy.stats.pearsonr(x=pt_true[true], y=pt_guessed[guess])[0] 
+                                           for true, guess in zip(["x","y","z"], list(comb))
+                                          ]) 
+                                        for comb in combo ]
+                                        )])
+
     # Computation of the optimal rotation matrix
     # This can be done using singular value decomposition (SVD) 
     # of the covariance matrix.
@@ -74,13 +87,12 @@ def kabsch(pt_true, pt_guessed):
     # whether we need to correct our rotation matrix to ensure a
     # right-handed coordinate system.
     # And finally calculating the optimal rotation matrix U
-    V, S, W = np.linalg.svd( np.dot(pt_true.T, pt_guessed) ) # SVD of covariance matrix
+    V, S, W = np.linalg.svd( np.dot(pt_true.T, pt_guessed[permutation]) ) # SVD of covariance matrix
     d = (np.linalg.det(V) * np.linalg.det(W)) < 0.0
     if d:
         S[-1] = -S[-1]
         V[:, -1] = -V[:, -1]
-    scale = sum(S) / pt_true.var().sum()
-    return pd.DataFrame(data = np.dot(pt_guessed, np.dot(V, W)) * scale, columns=["x", "y", "z"]) # return pt_guessed rotated by U ( = V * W, rotation matrix)
+    return pd.DataFrame(data = np.dot(pt_guessed[permutation], np.dot(V, W)), columns=["x", "y", "z"]) # return pt_guessed rotated by U ( = V * W, rotation matrix)
 
 def random_population(cmap, N, scale = 1e-2):
     weights = [np.triu(np.random.normal(loc=0.0, scale=scale, size=(len(cmap), len(cmap))) * cmap) for i in range(N)]
@@ -90,7 +102,7 @@ def get_cmap(protein, thr):
     return scipy.sparse.csc_matrix(scipy.spatial.distance.squareform(scipy.spatial.distance.pdist(protein.iloc[:,1:], metric="euclidean") < thr), dtype=np.float)
 
 def get_lap(cmap):
-    return scipy.sparse.csgraph.laplacian(cmap, normed=False)
+    return scipy.sparse.csc_matrix(scipy.sparse.csgraph.laplacian(cmap, normed=False))
 
 def laplacian_coords(protein, thr):
     """
@@ -158,23 +170,22 @@ rule all:
         db_compare = os.path.join(local, "db_compare.csv"),
 
 rule download:
+    input:
     output:
-        protein = os.path.join(local, pdb_dir, "{protein}.pdb"),
+        pdb = os.path.join(local, pdb_dir, "{protein}.pdb"),
     benchmark:
         os.path.join("benchmark", "benchmark_download")
     message:
         "Download of protein {wildcards.protein}"
-    params:
-        protein = "{protein}",
-        out_dir = os.path.join(local, pdb_dir),
-    run:
-        os.system("curl \"http://files.rcsb.org/view/"+ params.protein + ".pdb\" -o " + 
-                  os.path.join(local, pdb_dir) + "/\"" + params.protein + ".pdb\"")
+    log:
+        "logs/download/{protein}.log"
+    shell:
+        'curl "http://files.rcsb.org/view/{wildcards.protein}.pdb" -o {output.pdb} 2> {log}'
 
 rule build:
     input:
         os.path.join(local, cpp, "pdb2xyz.cpp"),
-        os.path.join(local, "build" + shell),
+        os.path.join(local, "build" + myshell),
     output:
         os.path.join(local, "bin", "pdb2xyz" + extension)
     benchmark:
@@ -207,8 +218,10 @@ rule pdb2xyz:
         nth_pdb2xyz 
     message:
         "Conversion PDB2xyz for {wildcards.protein}"
-    run:
-        os.system(' '.join([os.path.join(local, "bin", "pdb2xyz" + extension), input.pdbfile, "-s", ' '.join(atoms)]))
+    log:
+        "logs/pdb2xyz/{protein}.log"
+    shell:
+        ' '.join([os.path.join(local, "bin", "pdb2xyz" + extension), "{input.pdbfile}", "-s", ' '.join(atoms)])
 
 rule guess_protein:
     input:
@@ -244,15 +257,23 @@ rule compare:
                 tcoord = pd.read_csv(true, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
                 gcoord = pd.read_csv(guess, sep="\t", header=None, names=["atoms", "x", "y", "z"]).iloc[:, 1:]
 
+                # Translation
+                tcoord -= tcoord.mean(axis = 0)
+                gcoord -= gcoord.mean(axis = 0)
+
+                # Scaling
+                tcoord /= np.linalg.norm(tcoord, axis=0)
+                gcoord /= np.linalg.norm(gcoord, axis=0) # gcoord already normalized to 1 when eig results
+
                 # find right permutation of axis 
                 combo = list(itertools.permutations(["x", "y", "z"]))
                 permutation = list(combo[ np.argmax( [ sum([ scipy.stats.pearsonr(x=tcoord[true], y=gcoord[guess])[0] 
-                            						   for true, guess in zip(["x","y","z"], list(comb))
-                            						  ]) 
-                    							    for comb in combo ]
-                    							    )])
+                                                       for true, guess in zip(["x","y","z"], list(comb))
+                                                      ]) 
+                                                    for comb in combo ]
+                                                    )])
 
-                tot_dist =  np.sum( np.sqrt( np.sum( ((tcoord - tcoord.mean(axis = 0)) - gcoord[permutation])**2, axis=1) ) )
+                tot_dist =  np.sum( np.sqrt( np.sum( (tcoord - gcoord[permutation])**2, axis=1) ) )
                 pdb_name = true.split(os.sep)[-1].split(".")[0]
                 out.write("%s\t%d\t%.3f\t%.3f\t%s\n"%(pdb_name, len(tcoord), tot_dist, tot_dist / len(tcoord), ';'.join(map(str, permutation))))
 
@@ -284,3 +305,4 @@ rule reconstructGA:
             population = list(map(functools.partial(new_generation, rank=idx, elit_rate = ELIT, mutation_rate = mutation_rate, half = HALF, type = "strong"), population))
         population[best].to_csv(output.rec_file, sep=",", header=False, index=False)
 
+    

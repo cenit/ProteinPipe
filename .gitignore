@@ -69,12 +69,13 @@ bld/
 # folders
 .snakemake/
 benchmark/
-proteinPDB/
-proteinXYZ/
-proteinGUESS/
-proteinREC/
+protein/
+logs/
 
 # Build tex
 *.aux
 *.bbl
 *.fdb_latexmk
+
+# files
+cpp/viewer

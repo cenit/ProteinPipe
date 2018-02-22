@@ -1,4 +1,3 @@
-#curl "http://files.rcsb.org/view/{1PPE,1AVW,1BRC}.pdb" -o "#1.pdb"
 
 n_cpu: '1'
 NTH_PDB2XYZ: 1
@@ -19,8 +18,9 @@ mutation: .3
 folders:
   pdb_dir: 'protein'
   cpp: 'cpp'
-  py: 'python'
+  py: 'py'
 
+#curl "http://files.rcsb.org/view/{1PPE,1AVW,1BRC}.pdb" -o "#1.pdb"
 protein:
   - 1PPE
   - 1AVW

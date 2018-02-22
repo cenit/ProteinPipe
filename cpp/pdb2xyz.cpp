@@ -50,6 +50,7 @@ void pdb2xyz(const std::string &filename, const std::string &sep, const std::str
 			else
 				++cnt_gap;
 			
+			if(token[3].size() > 3) token[3] = token[3].substr(token[3].size() - 3, token[3].size() - 1);
 			os << token[3] << "\t" << token[6] << "\t" << token[7] << "\t" << token[8] << std::endl;
 		}
 
@@ -91,7 +92,8 @@ void pdb2xyz(const std::string &filename, const std::string &sep, const std::vec
 					++val_before;
 				else
 					++cnt_gap;
-			}	
+			}
+			if(token[3].size() > 3) token[3] = token[3].substr(token[3].size() - 3, token[3].size() - 1);
 			os << token[3] << "\t" << token[6] << "\t" << token[7] << "\t" << token[8] << std::endl;
 		}
 	is.close();

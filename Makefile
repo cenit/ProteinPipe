@@ -7,6 +7,10 @@ STD = -std=c++14
 fmath = -ffast-math
 snake = ./Snakefile
 
+node_size = 0.005
+edge_thickness = 0.0005
+pdb = ""
+
 ifeq ($(OS), Windows_NT)
 	inst = 'powershell "./install.ps1"'
 	remove = del /s 
@@ -31,7 +35,7 @@ install: $(inst)
 	$(inst) -y
 
 pipe: $(snake)
-	snakemake
+	snakemake --cores 8
 
 graph_pipe: $(snake)
 	snakemake --dag | dot -Tpdf > protein_pipe.pdf
@@ -39,8 +43,11 @@ graph_pipe: $(snake)
 pdb2xyz: $(SRC)/pdb2xyz.cpp
 		$(CXX) $(STD) $(fmath) $(gnu) $(OMP) -O3 -o $(OUT)/pdb2xyz $(SRC)/pdb2xyz.cpp
 
-viewer: $(SRC)/viewer.cpp
-		$(CXX) $(STD) $(fmath) $(gnu) $(OMP) -O3 -o $(OUT)/viewer $(SRC)/viewer.cpp
+#viewer: $(SRC)/viewer.cpp
+#		$(CXX) $(STD) $(fmath) $(gnu) $(OMP) -O3 -o $(OUT)/viewer $(SRC)/viewer.cpp
+
+compare:
+	@blender --python ./py/BlenderPDBRec.py -- -T ./protein/$(pdb).pdb.xyz -G ./protein/$(pdb).pdb.guess -s $(node_size) -l $(edge_thickness) 
 
 paper: $(tex_dir)/$(paper_file) \
 	   $(wildcard $(tex_dir)/img/**/*)

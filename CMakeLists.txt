@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 3.0)
 
-project (ProteinPipe)
+project (ProteinRec-pipeline)
 enable_language (CXX)
 set (CMAKE_CXX_STANDARD 11)
 
@@ -82,9 +82,10 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 set (HPP_DIR ${CMAKE_SOURCE_DIR}/cpp/lib) # directory of hpp
 set (CPP_DIR ${CMAKE_SOURCE_DIR}/cpp) # cpp directory
 
-find_package(OpenGL REQUIRED)
-find_package(GLUT REQUIRED)
-include_directories(${HPP_DIR} ${DATA_ANALYSIS} ${OpenGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
+#find_package(OpenGL REQUIRED)
+#find_package(GLUT REQUIRED)
+#include_directories(${HPP_DIR} ${OpenGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
+include_directories(${HPP_DIR})
 
 if (CYGWIN)
 	set (CMAKE_CXX_FLAGS "-std=gnu++14 ${CMAKE_CXX_FLAGS}")
@@ -99,10 +100,10 @@ endif()
 add_executable(	pdb2xyz
 				${CPP_DIR}/pdb2xyz.cpp
 			  )
-add_executable(	viewer
-				${CPP_DIR}/viewer.cpp
-				${HPP_DIR}/draw3d.hpp
-        ${HPP_DIR}/object.hpp
-				${HPP_DIR}/protein.hpp
-			  )
-target_link_libraries(viewer ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLUT_LIBRARIES})
+#add_executable(	viewer
+#				${CPP_DIR}/viewer.cpp
+#				${HPP_DIR}/draw3d.hpp
+#        ${HPP_DIR}/object.hpp
+#				${HPP_DIR}/protein.hpp
+#			  )
+#target_link_libraries(viewer ${OPENGL_gl_LIBRARY} ${OPENGL_glu_LIBRARY} ${GLUT_LIBRARIES})
