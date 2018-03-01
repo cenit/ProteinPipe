@@ -79,13 +79,12 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 
 ###########################################################################################
 
-set (HPP_DIR ${CMAKE_SOURCE_DIR}/cpp/lib) # directory of hpp
+#set (HPP_DIR ${CMAKE_SOURCE_DIR}/cpp/lib) # directory of hpp
 set (CPP_DIR ${CMAKE_SOURCE_DIR}/cpp) # cpp directory
 
 #find_package(OpenGL REQUIRED)
 #find_package(GLUT REQUIRED)
 #include_directories(${HPP_DIR} ${OpenGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
-include_directories(${HPP_DIR})
 
 if (CYGWIN)
 	set (CMAKE_CXX_FLAGS "-std=gnu++14 ${CMAKE_CXX_FLAGS}")
